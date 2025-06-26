@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Anca Breahna Blog Monitor</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    h1 { color: teal; }
+    .blog { margin-bottom: 2rem; padding: 1rem; border: 1px solid #ccc; border-radius: 8px; }
+    .blog h2 { margin: 0 0 0.5rem 0; font-size: 1.2rem; }
+    .link-item { margin-left: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>📝 Anca Breahna Blog Monitor</h1>
+  <p>Fetching blog list from <code>ancabreahna.com</code>...</p>
+  <div id="results"></div>
+
+  <script>
+    const BASE_URL = "https://ancabreahna.com";
+
+    async function fetchHTML(url) {
+      const response = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0" }
+      });
+      return await response.text();
+    }
+
+    async function getBlogLinks(blogUrl) {
+      const html = await fetchHTML(blogUrl);
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const content = doc.querySelector('.entry-content');
+      if (!content) return [];
+
+      const links = [...content.querySelectorAll('a[href]')]
+        .map(a => ({ text: a.textContent.trim(), href: a.href }))
+        .filter(l => l.href.startsWith('http'));
+
+      return links;
+    }
+
+    async function getBlogList() {
+      const blogListURL = `${BASE_URL}/blog/`;
+      const html = await fetchHTML(blogListURL);
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+
+      const anchors = [...doc.querySelectorAll('article a[href*="/blog/"]')];
+      const urls = [...new Set(
+        anchors
+          .map(a => a.href)
+          .filter(h => h.startsWith(BASE_URL))
+      )];
+
+      return urls;
+    }
+
+    async function runMonitor() {
+      const container = document.getElementById("results");
+      try {
+        const blogs = await getBlogList();
+        if (blogs.length === 0) {
+          container.innerHTML = "<p>No blogs found.</p>";
+          return;
+        }
+
+        for (const blogUrl of blogs) {
+          const slug = blogUrl.split("/").filter(x => x).pop();
+          const div = document.createElement("div");
+          div.className = "blog";
+          div.innerHTML = `<h2><a href="${blogUrl}" target="_blank">${slug}</a></h2><p>Fetching links...</p>`;
+          container.appendChild(div);
+
+          try {
+            const links = await getBlogLinks(blogUrl);
+            if (links.length === 0) {
+              div.innerHTML += "<p><em>No internal hyperlinks found.</em></p>";
+            } else {
+              const ul = document.createElement("ul");
+              for (const link of links) {
+                const li = document.createElement("li");
+                li.className = "link-item";
+                li.innerHTML = `<a href="${link.href}" target="_blank">${link.text}</a>`;
+                ul.appendChild(li);
+              }
+              div.appendChild(ul);
+            }
+          } catch (err) {
+            div.innerHTML += `<p style="color:red;">Error loading links: ${err.message}</p>`;
+          }
+        }
+      } catch (error) {
+        container.innerHTML = `<p style="color:red;">Error fetching blog list: ${error.message}</p>`;
+      }
+    }
+
+    runMonitor();
+  </script>
+</body>
+</html>
