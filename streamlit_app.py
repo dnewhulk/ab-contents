@@ -14,7 +14,10 @@ st.caption("Automatically scans the blog for updates and displays blog links + i
 
 @st.cache_data(show_spinner=True)
 def get_blog_urls():
-    res = requests.get(BLOG_LIST_URL)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+    res = requests.get(BLOG_LIST_URL, headers=headers)
     soup = BeautifulSoup(res.content, "html.parser")
     links = soup.select("article a[href*='/blog/']")
     urls = list(set([link["href"] for link in links if link["href"].startswith(BASE_URL)]))
@@ -22,7 +25,7 @@ def get_blog_urls():
 
 @st.cache_data(show_spinner=True)
 def get_blog_links(blog_url):
-    res = requests.get(blog_url)
+    res = requests.get(blog_url, headers={"User-Agent": "Mozilla/5.0"})
     soup = BeautifulSoup(res.content, "html.parser")
     content_div = soup.find("div", class_="entry-content")
     links = []
@@ -33,6 +36,7 @@ def get_blog_links(blog_url):
             if href.startswith("http"):
                 links.append({"text": text, "href": href})
     return links
+
 
 # --- Main App Logic ---
 
