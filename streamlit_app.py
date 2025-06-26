@@ -1,21 +1,18 @@
-# app.py
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-import json
-from datetime import datetime
-import os
 
+# URLs
 BASE_URL = "https://ancabreahna.com"
 BLOG_LIST_URL = f"{BASE_URL}/blog/"
-DATA_FILE = "blog_data.json"
 
-if os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "r") as f:
-        blog_data = json.load(f)
-else:
-    blog_data = {}
+# Set page config
+st.set_page_config(page_title="Anca Breahna Blog Monitor", layout="wide")
 
+st.title("📝 Anca Breahna Blog Monitor")
+st.caption("Automatically scans the blog for updates and displays blog links + internal hyperlinks from each post.")
+
+@st.cache_data(show_spinner=True)
 def get_blog_urls():
     res = requests.get(BLOG_LIST_URL)
     soup = BeautifulSoup(res.content, "html.parser")
@@ -23,6 +20,7 @@ def get_blog_urls():
     urls = list(set([link["href"] for link in links if link["href"].startswith(BASE_URL)]))
     return urls
 
+@st.cache_data(show_spinner=True)
 def get_blog_links(blog_url):
     res = requests.get(blog_url)
     soup = BeautifulSoup(res.content, "html.parser")
@@ -32,55 +30,27 @@ def get_blog_links(blog_url):
         for a in content_div.find_all("a", href=True):
             text = a.get_text(strip=True)
             href = a["href"]
-            links.append({"text": text, "href": href})
+            if href.startswith("http"):
+                links.append({"text": text, "href": href})
     return links
 
-def scan_blogs():
-    current_urls = get_blog_urls()
-    changes = {"new_blogs": [], "updated_links": []}
-    
-    for url in current_urls:
-        blog_id = url.rstrip('/').split('/')[-1]
-        links = get_blog_links(url)
+# --- Main App Logic ---
 
-        if blog_id not in blog_data:
-            blog_data[blog_id] = {
-                "url": url,
-                "links": links,
-                "last_checked": datetime.now().isoformat()
-            }
-            changes["new_blogs"].append((blog_id, url, links))
-        else:
-            old_links = blog_data[blog_id]["links"]
-            if links != old_links:
-                blog_data[blog_id]["links"] = links
-                blog_data[blog_id]["last_checked"] = datetime.now().isoformat()
-                changes["updated_links"].append((blog_id, url, links))
-    
-    with open(DATA_FILE, "w") as f:
-        json.dump(blog_data, f, indent=2)
+blog_urls = get_blog_urls()
 
-    return changes
-
-st.title("📝 Anca Breahna Blog Monitor")
-st.write("This tool checks for new blogs or changes in existing blog hyperlinks.")
-
-if st.button("🔍 Run Blog Scan"):
-    results = scan_blogs()
-    if results["new_blogs"]:
-        st.success("✅ New Blogs Found:")
-        for blog_id, url, links in results["new_blogs"]:
-            st.write(f"- [{blog_id}]({url})")
-            for l in links:
-                st.write(f"  • [{l['text']}]({l['href']})")
-    else:
-        st.info("No new blogs found.")
-
-    if results["updated_links"]:
-        st.warning("🔁 Blogs with Updated Links:")
-        for blog_id, url, links in results["updated_links"]:
-            st.write(f"- [{blog_id}]({url})")
-            for l in links:
-                st.write(f"  • [{l['text']}]({l['href']})")
+if not blog_urls:
+    st.warning("No blogs found on the site.")
 else:
-    st.write("Click the button above to run a scan.")
+    st.success(f"✅ Found {len(blog_urls)} blog post(s).")
+    
+    for i, url in enumerate(sorted(blog_urls), 1):
+        blog_slug = url.rstrip("/").split("/")[-1]
+        with st.expander(f"{i}. [{blog_slug}]({url})", expanded=False):
+            st.markdown(f"🔗 **Blog URL**: [{url}]({url})", unsafe_allow_html=True)
+            links = get_blog_links(url)
+            if links:
+                st.markdown("### Internal Hyperlinks in Content:")
+                for link in links:
+                    st.markdown(f"- [{link['text']}]({link['href']})")
+            else:
+                st.info("No internal hyperlinks found in this blog.")
